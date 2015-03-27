@@ -1,0 +1,2 @@
+spin -a kanibale.pml && gcc -O2 -DBFS -DSAFETY -o pan pan.c && ./pan -E
+spin -a daszek-rw.pml && gcc -O2 -o pan pan.c && ./pan -a -f
