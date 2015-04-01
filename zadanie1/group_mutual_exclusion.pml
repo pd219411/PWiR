@@ -14,7 +14,10 @@ typedef mutex_lock_t {
 
 #endif
 
-#ifndef QUEUE_NONDETERMINISTIC
+
+//-------------------- queue
+
+#ifdef QUEUE_DETERMINISTIC
 
 typedef queue_t {
 	chan channel = [N] of { int };
@@ -24,12 +27,47 @@ typedef queue_t {
 #define queue_is_not_empty(queue) nempty(queue.channel)
 
 #define queue_pop(queue, x) queue.channel ? x
-#define queue_push(queue, x) queue.channel ! x
+
 #define queue_fifo_push(queue, x) queue.channel ! x
 
 #define queue_length(queue) len(queue.channel)
 
+#define queue_push(queue, x) queue.channel ! x
+
 #endif
+
+#ifdef QUEUE_NONDETERMINISTIC
+
+typedef queue_t {
+	chan channel_x = [N] of { int };
+	chan channel_o = [N] of { int };
+};
+
+#define queue_is_empty(queue) (empty(queue.channel_x) && empty(queue.channel_o))
+#define queue_is_not_empty(queue) (nempty(queue.channel_x) || nempty(queue.channel_o))
+
+
+#define queue_pop(queue, x) \
+if \
+:: queue.channel_x ? x \
+:: empty(queue.channel_x) -> \
+	queue.channel_o ? x; \
+fi
+
+#define queue_fifo_push(queue, x) queue.channel_o ! x
+
+#define queue_length(queue) (len(queue.channel_x) + len(queue.channel_o))
+
+#define queue_push(queue, x) \
+if \
+:: true -> \
+	queue.channel_x ! x; \
+:: true -> \
+	queue.channel_o ! x; \
+fi
+
+#endif
+////////////////////////////////
 
 
 #define group_selection(out_group, pid) out_group = pid
@@ -62,21 +100,28 @@ active [N] proctype GroupMutualExclusionProcess() {
 	int temp_for_steps;
 
 	group_selection(shared.chosen_group[_pid], _pid);
-	printf("New process pid:%d group:%d\n", _pid, shared.chosen_group[_pid]);
+	printf("session pid group  %d  %d %d    NEW PROCESS vvvvvvvvvvvvvvvv\n", shared.session, _pid, shared.chosen_group[_pid]);
+
+	do
+	:: true ->
+private:
+	skip;
 
 	shared.wait[_pid] = false;
 
 	Acquire(shared.lock)
-
 	temp_bool_as_workaround = queue_is_empty(shared.queue);
 
 	if
 	:: (shared.session == shared.chosen_group[_pid]) && temp_bool_as_workaround ->
+		printf("session pid group  %d  %d %d    PRE no waiting, %d other already inside\n", shared.session, _pid, shared.chosen_group[_pid], shared.num);
 		shared.num = shared.num + 1;
 	:: (shared.session != shared.chosen_group[_pid]) && (shared.num == 0) ->
+		printf("session pid group  %d  %d %d    PRE changes session from %d to %d\n", shared.session, _pid, shared.chosen_group[_pid], shared.session, shared.chosen_group[_pid]);
 		shared.session = shared.chosen_group[_pid];
 		shared.num = 1;
 	:: else ->
+		printf("session pid group  %d  %d %d    PRE waits\n", shared.session, _pid, shared.chosen_group[_pid]);
 		shared.wait[_pid] = true;
 		queue_push(shared.queue, _pid);
 	fi;
@@ -86,7 +131,7 @@ active [N] proctype GroupMutualExclusionProcess() {
 	(!shared.wait[_pid]); // WAIT
 
 critical:
-	skip;
+	printf("session pid group  %d  %d %d    ENTERS!\n", shared.session, _pid, shared.chosen_group[_pid]);
 
 	Acquire(shared.lock)
 
@@ -110,22 +155,46 @@ critical:
 			:: shared.session == shared.chosen_group[temp_pid] ->
 				shared.num = shared.num + 1;
 				shared.wait[temp_pid] = false;
+				printf("session pid group  %d  %d %d    LEAVES invites process | %d\n", shared.session, _pid, shared.chosen_group[_pid], temp_pid);
 			:: else ->
 				queue_fifo_push(shared.queue, temp_pid);
+				printf("session pid group  %d  %d %d    LEAVES encounters      | %d\n", shared.session, _pid, shared.chosen_group[_pid], temp_pid);
 			fi;
 		}
 	:: else ->
-		skip;
+		printf("session pid group  %d  %d %d    LEAVES\n", shared.session, _pid, shared.chosen_group[_pid]);
 	fi;
 
 	Release(shared.lock)
+
+	od;
 }
 
-//ltl liveness { []
-//(GroupMutualExclusionProcess[0]@want -> <>Process[0]@cs)
-//}
+#ifdef LTL_MUTUAL_EXCLUSION
 
-ltl safety { always
+ltl mutual_exclusion { always
 ((GroupMutualExclusionProcess[0]@critical && GroupMutualExclusionProcess[1]@critical) implies
  (shared.chosen_group[0] == shared.chosen_group[1]))
 }
+
+#endif
+
+#ifdef LTL_CONCURRENT_ENTERING
+
+//TODO:
+ltl mutual_exclusion { always
+}
+
+#endif
+
+#ifdef LTL_LIVENESS
+
+ltl liveness {
+(eventually GroupMutualExclusionProcess[0]@critical) &&
+always (
+	(GroupMutualExclusionProcess[0]@private implies (eventually GroupMutualExclusionProcess[0]@critical)) &&
+	(GroupMutualExclusionProcess[0]@critical implies (eventually GroupMutualExclusionProcess[0]@private))
+)
+}
+
+#endif
