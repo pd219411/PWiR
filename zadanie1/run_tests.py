@@ -43,6 +43,7 @@ def check_trail(common_args):
 	process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	(stdoutdata, stderrdata) = process.communicate()
 	process.wait()
+	return (do_it_yourself_command_line(args), stdoutdata)
 #	print do_it_yourself_command_line(args)
 #	print stdoutdata
 
@@ -57,20 +58,25 @@ def run_that_test():
 #	print stdoutdata
 	doctor = SpinOutputDoctor()
 
+	#semaphore_type_list = ["SEMAPHORE_JUST_ATOMIC", "SEMAPHORE_WEAK"]
+	semaphore_type_list = ["SEMAPHORE_STRONG"]
 	queue_type_list = ["QUEUE_DETERMINISTIC", "QUEUE_NONDETERMINISTIC"]
 	ltl_list = ["LTL_MUTUAL_EXCLUSION", "LTL_CONCURRENT_ENTERING", "LTL_LIVENESS"]
 
-	for queue_type in queue_type_list:
-		for ltl in ltl_list:
-			common_args = ["-D" + queue_type, "-D" + ltl, "group_mutual_exclusion.pml"]
-			spin_generate(common_args)
-			pan_compile()
-			verify_results = pan_verify()
-			if doctor.is_it_a_trail(verify_results):
-				print "TRAIL FAIL"
-				#check_trail(common_args)
-			else:
-				print "OK"
+	for semaphore_type in semaphore_type_list:
+		for queue_type in queue_type_list:
+			for ltl in ltl_list:
+				common_args = ["-D" + semaphore_type, "-D" + queue_type, "-D" + ltl, "group_mutual_exclusion.pml"]
+				spin_generate(common_args)
+				pan_compile()
+				verify_results = pan_verify()
+				if doctor.is_it_a_trail(verify_results):
+					(command_line, trail_output) = check_trail(common_args)
+					print "TRAIL FAIL"
+					#print command_line
+					#print trail_output
+				else:
+					print "OK"
 
 if __name__ == "__main__":
 	run_that_test()
