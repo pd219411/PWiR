@@ -3,4 +3,4 @@ spin -a daszek-rw.pml && gcc -O2 -o pan pan.c && ./pan -a -f
 
 spin -DQUEUE_DETERMINISTIC -DLTL_LIVENESS -a group_mutual_exclusion.pml && gcc -O2 -o pan pan.c && ./pan -a -f -m100000
 
-spin -DQUEUE_NONDETERMINISTIC -DLTL_LIVENESS -g -p -t -T group_mutual_exclusion.pm
+spin -DQUEUE_NONDETERMINISTIC -DLTL_LIVENESS -g -p -t -T group_mutual_exclusion.pml

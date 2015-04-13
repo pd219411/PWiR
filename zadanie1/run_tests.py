@@ -13,7 +13,8 @@ import subprocess
 
 class SpinOutputDoctor(object):
 	def is_it_a_trail(self, output):
-		return False
+		return output.find("wrote group_mutual_exclusion.pml.trail") != -1
+		#return False
 
 def do_it_yourself_command_line(command_args):
 	return " ".join(command_args)
@@ -49,11 +50,6 @@ def run_that_test():
 #	os.unlink(self.pid_file)
 #	local_output = open(self.log_debug, 'w')
 
-#	start_command_args = ["valgrind", "--tool="+self.valgrind, "--log-file=" + os.path.join(self.tempdir, "valgrindlog_%d" % self.instance_nr)] + self.start_command_args
-#	process = subprocess.Popen(self.start_command_args, stdout=local_output, stderr=local_output)
-#	self.process.wait()
-#	self.pid_file = os.path.join(self.tempdir, "pidfile."+str(self.instance_nr))
-
 #	args = ["ls", "-rtla"]
 #	process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 #	(stdoutdata, stderrdata) = process.communicate()
@@ -61,18 +57,20 @@ def run_that_test():
 #	print stdoutdata
 	doctor = SpinOutputDoctor()
 
+	queue_type_list = ["QUEUE_DETERMINISTIC", "QUEUE_NONDETERMINISTIC"]
 	ltl_list = ["LTL_MUTUAL_EXCLUSION", "LTL_CONCURRENT_ENTERING", "LTL_LIVENESS"]
 
-	for ltl in ltl_list:
-		common_args = ["-DQUEUE_NONDETERMINISTIC", "-D" + ltl, "group_mutual_exclusion.pml"]
-		spin_generate(common_args)
-		pan_compile()
-		verify_results = pan_verify()
-		if doctor.is_it_a_trail(verify_results):
-			print "TRAIL FAIL"
-			#check_trail(common_args)
-		else:
-			print "OK"
+	for queue_type in queue_type_list:
+		for ltl in ltl_list:
+			common_args = ["-D" + queue_type, "-D" + ltl, "group_mutual_exclusion.pml"]
+			spin_generate(common_args)
+			pan_compile()
+			verify_results = pan_verify()
+			if doctor.is_it_a_trail(verify_results):
+				print "TRAIL FAIL"
+				#check_trail(common_args)
+			else:
+				print "OK"
 
 if __name__ == "__main__":
 	run_that_test()
