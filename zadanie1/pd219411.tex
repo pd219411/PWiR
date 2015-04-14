@@ -1,0 +1,35 @@
+\documentclass[12pt,onecolumn,a4paper]{article}
+\usepackage[utf8]{inputenc}
+
+\usepackage[polish]{babel}
+\usepackage[T1]{fontenc}
+%\usepackage{ae,aecompl}
+
+%\usepackage{color}
+%\usepackage{xcolor}
+%\usepackage{listings}
+
+\usepackage{listings}
+
+%\lstset{breaklines=true}
+
+\begin{document}
+
+\newpage
+\onecolumn
+
+\section{Opis}
+Skrypt do weryfikacji modeli napisałem w pythonie, uruchamia się go bez parametrów.
+Wszystkie modele znajdują się w jednym pliku. Model i formułę ltl wybieramy ustawiając odpowiednie wartości makrodefinicji.
+
+\section{Wyniki}
+Bezpieczeństwo jest zapewnione we wszystkich modelach niezależnie od implementacji.
+
+Podobnie zawsze spełniona jest własność Concurrent Entering.
+
+Żywotność nie jest zapewniona w przypadku wyboru słabego semafora, wtedy zwyczajnie głodzimy procesy na semaforze. Wybór implementacji Acquire jako bloku atomic nie popsuł tej własności, co było dla mnie zaskoczeniem.
+Żywotność nie jest zapewniona również w przypadku wyboru niedeterministycznej kolejki. Pomimo dziedziczenia sekcji krytycznej, proces czekający w kolejce, może zostać zagłodzony przez procesy z innych grup, wskakujące do kolejki przed niego.
+
+Jeśli w systemie są sami czytelnicy, to żaden czytelnik nigdy nie czeka i wynika to wprost z warunków w pierwszym bloku Acquire.
+
+\end{document}

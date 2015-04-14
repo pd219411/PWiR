@@ -1,4 +1,13 @@
+#ifdef RW_PROBLEM
+
+#define N 4
+#define READERS 2
+
+#else
+
 #define N 3
+
+#endif
 
 #ifdef SEMAPHORE_JUST_ATOMIC
 
@@ -22,8 +31,8 @@ typedef mutex_lock_t {
 
 #define mutex_lock_init(l) l.channel ! 12345;
 
-#define Acquire(l, pid) l.channel ? _;
-#define Release(l, pid) l.channel ! 12345;
+#define Acquire(l, pid) l.channel ? _; atomic {
+#define Release(l, pid) } l.channel ! 12345;
 
 #endif
 
@@ -37,13 +46,13 @@ typedef mutex_lock_t {
 
 #define mutex_lock_init(l) l.can_enter[0] = true; l.queue_last = 0
 
-#define Acquire(l, pid) d_step { l.my_place[pid] = l.queue_last; l.queue_last = (l.queue_last + 1) % N; }; l.can_enter[l.my_place[pid]]; l.can_enter[l.my_place[pid]] = false;
-#define Release(l, pid) l.can_enter[(l.my_place[pid] + 1) % N] = true;
+#define Acquire(l, pid) d_step { l.my_place[pid] = l.queue_last; l.queue_last = (l.queue_last + 1) % N; }; l.can_enter[l.my_place[pid]]; l.can_enter[l.my_place[pid]] = false; atomic {
+#define Release(l, pid) } l.can_enter[(l.my_place[pid] + 1) % N] = true;
 
 #endif
 
 
-//-------------------- queue
+
 
 #ifdef QUEUE_DETERMINISTIC
 
@@ -95,15 +104,34 @@ if \
 fi
 
 #endif
-////////////////////////////////
 
+
+
+
+#ifdef RW_PROBLEM
+
+#define group_selection(out_group, pid) \
+if \
+:: pid < READERS -> \
+	out_group = 0; \
+:: else -> \
+	out_group = pid; \
+fi
+
+#else
 
 #define group_selection(out_group, pid) out_group = pid
+
+#endif
+
+
+
+
 
 typedef group_mutual_exclusion_shared_t {
 	mutex_lock_t lock;
 	int session;
-	int num; //TODO: rename to number in critical section
+	int num; //number in critical section
 	queue_t queue;
 	bool wait[N];
 	int chosen_group[N];
@@ -113,11 +141,7 @@ inline group_mutual_exclusion_shared_init(gmes) {
 	mutex_lock_init(gmes.lock);
 	gmes.session = 1;
 	gmes.num = 0;
-	//TODO: queue init
-	//wait array init
-	//chosen group array init
 }
-
 
 group_mutual_exclusion_shared_t shared;
 
@@ -209,13 +233,21 @@ init {
 	};
 }
 
+
+
+#ifdef RW_PROBLEM
+
 #ifdef LTL_MUTUAL_EXCLUSION
 
 ltl mutual_exclusion {
 always (
-	(GroupMutualExclusionProcess[1]@critical && GroupMutualExclusionProcess[2]@critical)
+	((GroupMutualExclusionProcess[1]@critical && GroupMutualExclusionProcess[2]@critical)
 	implies
-	(shared.chosen_group[1] == shared.chosen_group[2])
+	(shared.chosen_group[0] == shared.chosen_group[1]))
+	&&
+	!(GroupMutualExclusionProcess[1]@critical && GroupMutualExclusionProcess[3]@critical)
+	&&
+	!(GroupMutualExclusionProcess[3]@critical && GroupMutualExclusionProcess[4]@critical)
 )
 }
 
@@ -224,11 +256,9 @@ always (
 #ifdef LTL_CONCURRENT_ENTERING
 
 ltl concurrent_entering {
-always (
-	(GroupMutualExclusionProcess[2]@private && GroupMutualExclusionProcess[3]@private)
-	implies
-	(eventually GroupMutualExclusionProcess[1]@critical)
-)
+(always (GroupMutualExclusionProcess[3]@private && GroupMutualExclusionProcess[4]@private))
+implies
+(eventually GroupMutualExclusionProcess[1]@critical)
 }
 
 #endif
@@ -242,5 +272,43 @@ always (
 	(GroupMutualExclusionProcess[1]@critical implies (eventually GroupMutualExclusionProcess[1]@private))
 )
 }
+
+#endif
+
+
+#else
+
+
+#ifdef LTL_MUTUAL_EXCLUSION
+
+ltl mutual_exclusion {
+always (
+	!(GroupMutualExclusionProcess[1]@critical && GroupMutualExclusionProcess[2]@critical)
+)
+}
+
+#endif
+
+#ifdef LTL_CONCURRENT_ENTERING
+
+ltl concurrent_entering {
+(always (GroupMutualExclusionProcess[2]@private && GroupMutualExclusionProcess[3]@private))
+implies
+(eventually GroupMutualExclusionProcess[1]@critical)
+}
+
+#endif
+
+#ifdef LTL_LIVENESS
+
+ltl liveness {
+(eventually GroupMutualExclusionProcess[1]@critical) &&
+always (
+	(GroupMutualExclusionProcess[1]@private implies (eventually GroupMutualExclusionProcess[1]@critical)) &&
+	(GroupMutualExclusionProcess[1]@critical implies (eventually GroupMutualExclusionProcess[1]@private))
+)
+}
+
+#endif
 
 #endif
